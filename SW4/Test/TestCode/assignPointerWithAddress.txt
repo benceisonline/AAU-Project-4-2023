@@ -1,0 +1,4 @@
+ptr = &a;
+ptr2 = &example;
+ptr3 = &test;
+END;

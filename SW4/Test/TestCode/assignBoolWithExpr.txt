@@ -1,0 +1,6 @@
+a = (true || false) && true && !x;
+b = true || false;
+c = false && true;
+d = 2.5 < 4.3 && true;
+e = 2 < 4 <= 5 > 5 && 5 >= 40 == 5 != 10;
+END;

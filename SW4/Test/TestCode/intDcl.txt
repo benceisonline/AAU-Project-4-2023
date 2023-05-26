@@ -1,0 +1,4 @@
+int phone_number;
+int creditCardNumber;
+int a123456;
+END;

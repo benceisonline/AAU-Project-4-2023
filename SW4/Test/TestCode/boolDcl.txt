@@ -1,0 +1,4 @@
+boolean fooBar;
+boolean thisIsA_boolean2023;
+boolean boolean_value;
+END;

@@ -1,0 +1,454 @@
+options {
+  STATIC = false;
+}
+
+PARSER_BEGIN(Compiler)
+
+import AST.*;
+import AST.CodeGeneration.CodeGenerator;
+import AST.Nodes.*;
+import AST.Types.*;
+import AST.SymbolTableFilling.SymbolTableFilling;import AST.Types.ProcedureType;
+import java.util.ArrayList;
+
+public class Compiler {
+    public static void main(String[] args) {
+        try {
+            Compiler compiler = new Compiler(new java.io.FileReader("Compiler/code.txt"));
+            Node prog = compiler.Prog();
+
+            PrettyPrint prettyPrint = new PrettyPrint();
+            ArrayList<SymbolTableFilling> symbolTableFillings = new ArrayList<>();
+            SymbolTableFilling symbolTableFilling = new SymbolTableFilling(symbolTableFillings , 0);
+            TypeChecking typeChecking = new TypeChecking(symbolTableFillings);
+            ConstantFolding constantFolding = new ConstantFolding();
+            CodeGenerator codeGenerator = new CodeGenerator(symbolTableFillings);
+
+            prog.accept(prettyPrint);
+            System.out.println(prettyPrint.getResult());
+            System.out.println();
+            System.out.println("Syntax is good");
+            prog.accept(symbolTableFilling);
+            System.out.println("Symbol table is good");
+            prog.accept(typeChecking);
+            System.out.println("Type check is good");
+            prog.accept(constantFolding);
+            System.out.println("Constant folding is good");
+            prog.accept(codeGenerator);
+            System.out.println("Code generator is good");
+
+            codeGenerator.generateCode();
+
+        } catch (Throwable e) {
+            // Catching Throwable is ugly but JavaCC throws Error objects!
+            System.out.println("Syntax error: " + e.getMessage());
+        }
+    }
+}
+
+PARSER_END(Compiler)
+
+SKIP: /* SKIP */
+{ " "
+| "\t"
+| "\n"
+| "\r"
+| <COMMENT : "/*" (~["/"] | "/" ~["/"])* "*/" >
+}
+
+TOKEN : /* NUMBERS AND ARITHMETIC OPERATIONS */
+{ <INTDCL: "int">
+| <INT: ( < DIGIT > )>
+| <FLOATDCL: "float">
+| <FLOAT: ( < DIGIT > ) (".") ( < DIGIT > )+ >
+| <#DIGIT: ( "0" | ["1"-"9"] ( ["0"-"9"] )* ) >
+| <PLUS: "+">
+| <MINUS: "-">
+| <MULTIPLY: "*">
+| <DIVIDE: "/">
+| <POINTERDCL: "pointer">
+}
+
+TOKEN: /* LOGIC */
+{ <IF: "if">
+| <ELSE: "else">
+| <AND: "&&">
+| <OR: "||">
+| <NOT: "!">
+| <EQ: "==">
+| <NE: "!=">
+| <LT: "<">
+| <LE: "<=">
+| <GT: ">">
+| <GE: ">=">
+| <BOOLDCL: "boolean">
+| <TRUE: "true" >
+| <FALSE: "false" >
+}
+
+TOKEN : /* ASSIGNMENT OPERATION AND BASIC CONTROL STRUCTURE */
+{ <ASSIGN: "=">
+| <LPAREN: "(">
+| <RPAREN: ")">
+| <LBRACE: "{">
+| <RBRACE: "}">
+| <END_OF_LINE: ";">
+| <ADDRESS: "&">
+| <HASHTAG: "#">
+| <END_OF_FILE: "END">
+| <WHILE: "while">
+| <PROCEDURE: "proc">
+| <COMMA: ",">
+}
+
+TOKEN : /* ID */
+{ <ID: (["a"-"z", "A"-"Z", "_"]) (["a"-"z", "A"-"Z", "_", "0"-"9"])*> }
+
+
+Node Prog() :
+{
+ Prog prog = new Prog();
+ Node stmt = null;
+ }
+{( stmt = Stmt() { prog.addChild(stmt); } )* < END_OF_FILE > < END_OF_LINE >
+{
+    return prog;
+}
+}
+
+Node Stmt() :
+{
+    Node node;
+    Node expr = null;
+    Node proc = null;
+    Token t;
+    Token prefix = null;
+    Token prefix2 = null;
+    Token tAddress = null;
+    Token compAssOp = null;
+    Id id;
+    AssignmentOp assignmentOp;
+}
+{ LOOKAHEAD(2) node = Assignment() < END_OF_LINE >
+{
+    return node;
+}
+| node = Dcl()
+{
+    return node;
+}
+| node = IfStmt()
+{
+    return node;
+}
+| node = WhileLoop()
+{
+    return node;
+}
+| LOOKAHEAD(2) node = Procedure() < END_OF_LINE >
+{
+    return node;
+}
+}
+
+Node Assignment() :
+{
+    Token t;
+    Token compAssOp;
+    Token tAddress = null;
+    Token prefix = null;
+    Node expr = null;
+}
+{ LOOKAHEAD(2) t = < ID > ( compAssOp = < PLUS > | compAssOp = < MINUS > ) < ASSIGN > expr = Expr()
+{
+    return new AssignmentOp(t.image, new Id(t.image), expr, compAssOp.image);
+}
+| LOOKAHEAD(2) t = < ID > < ASSIGN > ( prefix = < ADDRESS > tAddress = < ID > | expr = Expr() )
+{
+    if (prefix != null) {
+        return new AssignmentOp(t.image, new Id(t.image), new Id(prefix.image, tAddress.image));
+    }
+    return new AssignmentOp(t.image, new Id(t.image), expr);
+}
+| prefix = < HASHTAG > t = < ID > < ASSIGN > expr = Expr()
+{
+    return new AssignmentOp(t.image, new Id(prefix.image, t.image), expr);
+}
+}
+
+Node Procedure() :
+{
+    Token t;
+    Node val = null;
+}
+{ t = < ID > < LPAREN > ( val = Val() )? < RPAREN >
+{
+    if (val != null) {
+        return new Procedure(t.image, new Id(t.image), val);
+    }
+    return new Procedure(t.image, new Id(t.image));
+}
+}
+
+Node Dcl() :
+{
+ Node expr = null;
+ Token tAddress = null;
+ Token prefix = null;
+ Node proc;
+ Token t;
+ }
+{ < FLOATDCL > t = < ID > ( < ASSIGN > expr = Expr() )? < END_OF_LINE >
+{
+   if (expr != null) {
+       FloatDcl floatDcl = new FloatDcl(t.image);
+       return new AssignmentOp(t.image, floatDcl, expr);
+   }
+   return new FloatDcl(t.image);
+}
+| < INTDCL > t = < ID > ( < ASSIGN > expr = Expr() )? < END_OF_LINE >
+{
+    if (expr != null) {
+        IntDcl intDcl = new IntDcl(t.image);
+        return new AssignmentOp(t.image, intDcl, expr);
+    }
+    return new IntDcl(t.image);
+}
+| < BOOLDCL > t = < ID > ( < ASSIGN > expr = Expr() )? < END_OF_LINE >
+{
+    if (expr != null) {
+        BoolDcl boolDcl = new BoolDcl(t.image);
+        return new AssignmentOp(t.image, boolDcl, expr);
+    }
+    return new BoolDcl(t.image);
+}
+| < POINTERDCL > t = < ID > ( < ASSIGN > prefix = < ADDRESS > tAddress = < ID > )? < END_OF_LINE >
+{
+    if (tAddress != null) {
+        PointerDcl pointerDcl = new PointerDcl(t.image);
+        Id id = new Id(prefix.image, tAddress.image);
+        return new AssignmentOp(t.image, pointerDcl, id);
+    }
+    return new PointerDcl(t.image);
+}
+| proc = ProcedureDcl()
+{
+    return proc;
+}
+}
+
+Node ProcedureDcl() :
+{
+    Token t;
+    Token type = null;
+    Token tParam = null;
+    Node param = null;
+    Node block;
+}
+{ < PROCEDURE > t = < ID >
+< LPAREN > ( type = < INTDCL > tParam = < ID > { param = new IntDcl(tParam.image); } | type = < FLOATDCL > tParam = < ID > { param = new FloatDcl(tParam.image); } | type = < BOOLDCL > tParam = < ID > { param = new BoolDcl(tParam.image); } | type = < POINTERDCL > tParam = < ID > { param = new PointerDcl(tParam.image); } )? < RPAREN >
+< LBRACE > block = Block() < RBRACE >
+{
+    if (type != null) {
+        ProcedureDcl proc = new ProcedureDcl(t.image, param, block);
+        switch (type.image) {
+            case "int":
+                proc.setType(new IntType());
+                break;
+            case "float":
+                proc.setType(new FloatType());
+                break;
+            case "boolean":
+                proc.setType(new BooleanType());
+                break;
+            case "pointer":
+                proc.setType(new PointerType());
+                break;
+            default:
+                proc.setType(new ProcedureType());
+        }
+        return proc;
+    }
+
+    return new ProcedureDcl(t.image, block);
+}
+}
+
+Node IfStmt() :
+{
+    Node expr;
+    Node ifBlock;
+    Node elseBlock = null;
+}
+{
+< IF > < LPAREN > expr = Expr() < RPAREN > < LBRACE > ifBlock = Block() < RBRACE > ( < ELSE > < LBRACE > elseBlock = Block() < RBRACE > )?
+{
+    if (elseBlock != null) {
+        return new IfElseStmt(expr, ifBlock, elseBlock);
+    }
+    return new IfStmt(expr, ifBlock);
+}
+}
+
+Node WhileLoop() :
+{
+    Node expr;
+    Node block;
+}
+{ < WHILE > < LPAREN > expr = Expr() < RPAREN > < LBRACE > block = Block() < RBRACE >
+{
+    return new WhileLoop(expr, block);
+}
+}
+
+Node Block() :
+{
+   Block block = new Block();
+   Node stmt = null;
+}
+{
+( stmt = Stmt() { block.addChild(stmt); } )*
+{
+    return block;
+}
+}
+
+Node Expr() :
+{
+ Node expr;
+}
+{ expr = OrOp()
+{
+    return expr;
+}
+}
+
+Node OrOp() :
+{
+    Node left = null;
+    Token op = null;
+    Node right = null;
+}
+{ left = AndOp() (( op = <OR> ) right = AndOp() { left = new ComparisonOp(left, op.image, right); })*
+{
+    return left;
+}
+}
+
+Node AndOp() :
+{
+    Node left = null;
+    Token op = null;
+    Node right = null;
+}
+{ left = EqualityOp() (( op = <AND>) right = EqualityOp() { left = new ComparisonOp(left, op.image, right); })*
+{
+    return left;
+}
+}
+
+Node EqualityOp() :
+{
+    Node left = null;
+    Token op = null;
+    Node right = null;
+}
+{ left = ComparisonOp() (( op = <EQ> | op = <NE>) right = ComparisonOp() { left = new ComparisonOp(left, op.image, right); })*
+{
+    return left;
+}
+}
+
+Node ComparisonOp() :
+{
+    Node left = null;
+    Token op = null;
+    Node right = null;
+ }
+{left = ArithmeticPlusMinusOp() (( op = <LT> | op = <GT> | op = <GE> | op = <LE> ) right = ArithmeticPlusMinusOp() { left = new ComparisonOp(left, op.image, right); })*
+{
+    return left;
+}
+}
+
+Node ArithmeticPlusMinusOp() :
+{
+    Node left = null;
+    Token op = null;
+    Node right = null;
+ }
+{ left = ArithmeticMulDivOp() ((op = <PLUS> | op = <MINUS> ) right = ArithmeticMulDivOp() { left = new ArithmeticOp(left, op.image, right); })*
+{
+    return left;
+}
+}
+
+Node ArithmeticMulDivOp() :
+{
+    Node left = null;
+    Token op = null;
+    Node right = null;
+ }
+{ left = NegationOp() ((op = < MULTIPLY > | op = < DIVIDE > ) right = NegationOp() { left = new ArithmeticOp(left, op.image, right); })*
+{
+    return left;
+}
+}
+
+
+Node NegationOp() :
+{
+    Node factor;
+    boolean hasNegationOp = false;
+}
+{
+ ( <NOT> { hasNegationOp = true; })? factor = Factor()
+{
+    if (hasNegationOp) {
+        return new NegationOp(factor);
+    }
+    return factor;
+}
+}
+
+Node Factor() :
+{
+    Node val;
+    Node expr;
+ }
+{ <LPAREN> expr = Expr() <RPAREN>
+{
+    return expr;
+}
+| val = Val()
+{
+    return val;
+}
+}
+
+Node Val() :
+{
+    Token prefix = null;
+    Token t;
+ }
+{ t = < INT >
+{
+    return new IntNum(Integer.parseInt(t.image));
+}
+| t = < FLOAT >
+{
+    return new FloatNum(Float.parseFloat(t.image));
+}
+| ( prefix = < MULTIPLY > )? t = < ID >
+{
+    if (prefix != null) {
+        return new Id(prefix.image, t.image);
+    }
+    return new Id(t.image);
+}
+| (t = < TRUE > | t = < FALSE >)
+{
+    return new Bool(Boolean.parseBoolean(t.image));
+}
+}
+

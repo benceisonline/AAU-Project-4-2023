@@ -1,0 +1,19 @@
+/* Tegner et kryds på skærmen */
+int a = 0;
+pointer p = &a;
+
+proc proc1(int b) {
+    while (a < 32) {
+        #p = 1;
+        a += 1;
+        p += b;
+    }
+}
+
+p = 510;
+proc1(33);
+a = 0;
+p = 510 + 31;
+proc1(31);
+
+END;

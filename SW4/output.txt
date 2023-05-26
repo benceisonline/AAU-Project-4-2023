@@ -1,0 +1,41 @@
+LDX #0
+TXA
+PHA
+TSX
+INX
+TXA
+TAY
+LDX $0100, y
+TXA
+PHA
+LDX #1
+PLA
+STX $0100
+CLC
+CMP $0100
+BNE false1
+LDA #1
+JMP store1
+false1:
+ LDA #0
+store1:
+PHA
+PLA
+CMP #1
+BNE else0
+ifthen0:
+LDX #1
+TXA
+TSX
+INX
+STA $0100, x
+JMP end0
+else0:
+LDX #2
+TXA
+TSX
+INX
+STA $0100, x
+end0:
+JMP Final
+Final:

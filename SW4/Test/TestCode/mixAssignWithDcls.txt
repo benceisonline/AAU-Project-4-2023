@@ -1,0 +1,4 @@
+int a = 1;
+boolean b = false;
+float c = 6.2;
+END;

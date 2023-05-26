@@ -1,0 +1,1 @@
+Test AST ved at køre debuggeren på parser.java efter parser.prog er kørt og så er der er en nested liste med alle noder i debug terminalen. Et nodes børn bliver tilføjet når noden bliver oprettet i jj filen.

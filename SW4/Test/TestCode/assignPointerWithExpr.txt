@@ -1,0 +1,4 @@
+*ptr = 2 - (4 + 4);
+Pointer = 2 < 4;
+*newPointer = true;
+END;

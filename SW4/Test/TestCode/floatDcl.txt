@@ -1,0 +1,4 @@
+float floatDcl;
+float my_variable;
+float order123;
+END;

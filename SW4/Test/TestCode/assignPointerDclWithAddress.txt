@@ -1,0 +1,4 @@
+boolean *ptr = &a;
+int *ptr2 = &example;
+float *ptr3 = &test;
+END;
